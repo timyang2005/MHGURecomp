@@ -96,6 +96,15 @@ jobs:
           chmod 600 "$KEYSTORE_PATH" "$KEYSTORE_PATH.pass"
           # 立即验证密钥可用，避免构建到一半才失败
           keytool -list -keystore "$KEYSTORE_PATH" -storepass:file "$KEYSTORE_PATH.pass" > /dev/null
+          # 自动取出私钥别名，显式传给 apksigner（不依赖「单条目时自动选择」的行为）
+          KEY_ALIAS="$(keytool -list -keystore "$KEYSTORE_PATH" -storepass:file "$KEYSTORE_PATH.pass" \
+            | awk -F, '/PrivateKeyEntry/ {print $1; exit}' | tr -d '[:space:]')"
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "::error::密钥库中没有私钥条目，请检查 ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "签名别名：$KEY_ALIAS"
+          echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
 
       - name: 记录签名证书指纹（用来确认每次构建沿用同一签名）
         run: |
@@ -139,7 +148,7 @@ jobs:
           # 用 DEBUG_SIGN 变量把 apk 目标的签名换成固定 release key，避免依赖 make dist
           # （dist 会校验 generated/gen.id，没有游戏文件时必然失败）
           make PLATFORM=android ABI="$ABI" -j"$(nproc)" VERSION="$VERSION" \
-            DEBUG_SIGN="--ks $KEYSTORE_PATH --ks-pass file:$KEYSTORE_PATH.pass --v4-signing-enabled false"
+            DEBUG_SIGN="--ks $KEYSTORE_PATH --ks-key-alias $KEY_ALIAS --ks-pass file:$KEYSTORE_PATH.pass --v4-signing-enabled false"
 
       - name: 校验 APK 签名与内容
         run: |
