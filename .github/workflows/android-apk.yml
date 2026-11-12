@@ -46,7 +46,33 @@ jobs:
           java-version: "17"
 
       - name: 准备 Android SDK 命令行工具
-        uses: android-actions/setup-android@v3
+        # 不用 android-actions/setup-android@v3：它内部会执行 `sdkmanager tools`，
+        # 而 Google 已从 SDK 仓库移除 "tools" 包，导致 "Failed to find package 'tools'" 直接失败。
+        # runner 镜像本身自带 SDK 与 cmdline-tools，直接复用即可。
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          fi
+          SDKMGR="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMGR" ]; then
+            SDKMGR="$(ls -1 "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1 || true)"
+          fi
+          if [ -z "$SDKMGR" ]; then
+            echo "::notice::runner 未预装 cmdline-tools，下载官方 commandlinetools"
+            curl -fsSL --retry 3 -o /tmp/clt.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            rm -rf "$SDK/cmdline-tools/latest" /tmp/clt
+            mkdir -p "$SDK/cmdline-tools"
+            unzip -q /tmp/clt.zip -d /tmp/clt
+            mv /tmp/clt/cmdline-tools "$SDK/cmdline-tools/latest"
+            SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "ANDROID_HOME=$SDK"
+          echo "sdkmanager=$SDKMGR"
+          echo "$(dirname "$SDKMGR")" >> "$GITHUB_PATH"
+          "$SDKMGR" --version
 
       - name: 安装 SDK 组件（platform / build-tools / NDK / CMake）
         run: |
@@ -57,6 +83,8 @@ jobs:
             "build-tools;${BUILD_TOOLS_VERSION}" \
             "ndk;${NDK_VERSION}" \
             "cmake;${CMAKE_VERSION}"
+          # android/android.mk 用 $(lastword ...) 取 NDK 与 CMake，安装后核对确实落到预期路径
+          ls -d "$ANDROID_HOME/ndk/$NDK_VERSION" "$ANDROID_HOME/cmake/$CMAKE_VERSION"
 
       - name: 安装主机依赖与 Python 工具链
         run: |
