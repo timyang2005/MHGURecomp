@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/images/logo.webp" alt="GU Recomp" width="481"></p>
 
-<p align="center"><b>English</b> · <a href="README.es.md">Español</a></p>
+<p align="center"><b>English</b> · <a href="README.es.md">Español</a> · <a href="README.zh-CN.md">简体中文</a></p>
 
 <p align="center">
   <a href="https://github.com/morerokk/MHGURecomp/releases/latest"><img src="https://img.shields.io/github/v/release/morerokk/MHGURecomp?style=flat-square&label=release&labelColor=1d1e22&color=c58a2e" alt="Latest release"></a>
