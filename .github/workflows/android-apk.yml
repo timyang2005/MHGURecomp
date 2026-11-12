@@ -173,9 +173,19 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "构建版本：$VERSION"
+          # runner 镜像里预装了更新的 NDK（如 r30），而 android/android.mk 用
+          # $(lastword $(wildcard $(ANDROID_SDK)/ndk/*)) 取版本，会挑到最新那个。
+          # 新 NDK 的 bionic 头文件与项目源码不兼容（runtime/hle/prompts.c 里 `far`
+          # 被宏展开），所以显式把 NDK 与 CMake 钉到工作流指定的版本。
+          NDK_DIR="$ANDROID_HOME/ndk/$NDK_VERSION"
+          CMAKE_DIR="$ANDROID_HOME/cmake/$CMAKE_VERSION"
+          test -d "$NDK_DIR" || { echo "::error::NDK 未安装：$NDK_DIR"; exit 1; }
+          echo "NDK: $NDK_DIR"
+          echo "CMake: $CMAKE_DIR"
           # 用 DEBUG_SIGN 变量把 apk 目标的签名换成固定 release key，避免依赖 make dist
           # （dist 会校验 generated/gen.id，没有游戏文件时必然失败）
-          make PLATFORM=android ABI="$ABI" -j"$(nproc)" VERSION="$VERSION" \
+          make PLATFORM=android ABI="$ABI" NDK="$NDK_DIR" CMAKE_DIR="$CMAKE_DIR" \
+            -j"$(nproc)" VERSION="$VERSION" \
             DEBUG_SIGN="--ks $KEYSTORE_PATH --ks-key-alias $KEY_ALIAS --ks-pass file:$KEYSTORE_PATH.pass --v4-signing-enabled false"
 
       - name: 校验 APK 签名与内容
