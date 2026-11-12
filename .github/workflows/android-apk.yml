@@ -202,10 +202,18 @@ jobs:
             echo "GAME_LIB=no" >> "$GITHUB_ENV"
           fi
           # 签名必须与 secrets 里的固定密钥一致
-          if ! grep -q "Signer #1 certificate SHA-256" certs.txt; then
-            echo "::error::APK 签名校验失败"
+          # apksigner --print-certs 输出的是 "V2.0/V3.0 Signer: certificate SHA-256 digest: <小写无冒号>"，
+          # keytool 输出的是 "SHA256: AA:BB:..."，先统一格式再比对
+          EXPECTED="$(keytool -list -v -keystore "$KEYSTORE_PATH" -storepass:file "$KEYSTORE_PATH.pass" \
+            | grep -oE 'SHA256: [0-9A-F:]+' | head -1 | cut -d' ' -f2 | tr -d ':' | tr 'A-F' 'a-f')"
+          ACTUAL="$(grep -oE 'certificate SHA-256 digest: [0-9a-f]+' certs.txt | head -1 | awk '{print $NF}')"
+          echo "期望证书 SHA-256: $EXPECTED"
+          echo "APK  证书 SHA-256: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK 签名与固定密钥不一致"
             exit 1
           fi
+          echo "✔ APK 由固定密钥签名，指纹与 secrets 一致"
 
       - name: 写入构建摘要
         run: |
